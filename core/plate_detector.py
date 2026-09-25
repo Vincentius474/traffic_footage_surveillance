@@ -5,20 +5,21 @@ class PlateDetector:
 
     def __init__(
         self,
-        model_path="models/license_plate_model.pt",
+        model_path="models/license-plate-finetune-v1n.pt",
         confidence=0.25
     ):
 
-        self.model = YOLO(
-            model_path
-        )
+        self.model = YOLO(model_path)
 
         self.confidence = confidence
 
     def detect(self, vehicle_image):
 
+        if vehicle_image is None:
+            return []
+
         results = self.model.predict(
-            vehicle_image,
+            source=vehicle_image,
             conf=self.confidence,
             verbose=False
         )

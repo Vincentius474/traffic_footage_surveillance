@@ -380,7 +380,7 @@ class TrafficVehicleCounter:
             )
 
         self.plate_detector = PlateDetector(
-            model_path="models/license_plate_model.pt",
+            model_path="models/license-plate-finetune-v1n.pt",
             confidence=0.25
         )
 
@@ -1133,18 +1133,36 @@ class TrafficVehicleCounter:
 
             return
 
-        plates = self.plate_detector.detect(
-            vehicle_crop
-        )
+        # -------------------------------------
+        # DETECT PLATE
+        # -------------------------------------
+
+        plates = []
+
+        if self.plate_detector is not None:
+
+            plates = self.plate_detector.detect(
+                vehicle_crop
+            )
+
+        # -------------------------------------
+        # SELECT BEST PLATE
+        # -------------------------------------
 
         plate_image = None
+
         plate_confidence = 0.0
 
         if plates:
 
             best_plate = max(
                 plates,
-                key=lambda p: p["confidence"]
+                key=lambda plate:
+                    plate["confidence"]
+            )
+
+            plate_confidence = (
+                best_plate["confidence"]
             )
 
             plate_image = self.crop_plate(
@@ -1152,12 +1170,8 @@ class TrafficVehicleCounter:
                 best_plate
             )
 
-            plate_confidence = (
-                best_plate["confidence"]
-            )
-
         # -------------------------------------
-        # SAVE VEHICLE
+        # CAPTURE EVENT
         # -------------------------------------
 
         event = self.capture_manager.capture_vehicle(
@@ -1174,17 +1188,33 @@ class TrafficVehicleCounter:
 
             plate_number="UNKNOWN",
 
-            plate_confidence=0.0,
+            plate_confidence=plate_confidence,
 
-            plate_image=None
+            plate_image=plate_image
         )
 
-        self.status_label.config(
-            text=(
+        # -------------------------------------
+        # STATUS
+        # -------------------------------------
+
+        if plate_image is not None:
+
+            status = (
                 f"Captured {vehicle_type} "
-                f"ID:{vehicle_id} "
-                f"({direction})"
+                f"ID:{vehicle_id} | "
+                f"Plate detected"
             )
+
+        else:
+
+            status = (
+                f"Captured {vehicle_type} "
+                f"ID:{vehicle_id} | "
+                f"No plate detected"
+            )
+
+        self.status_label.config(
+            text=status
         )
 
     def crop_vehicle(self, frame, detection):
