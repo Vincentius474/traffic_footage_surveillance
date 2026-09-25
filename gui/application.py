@@ -1,15 +1,17 @@
-import csv
-import os
-import time
-from datetime import datetime
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import filedialog, messagebox
+from tkinter import ttk
 
+import time
+import os
 import cv2
-from PIL import Image, ImageTk
 
+from core.video_manager import VideoManager
 from core.tracker import VehicleTracker
-from core.counter import VehicleCounter
+from gui.video_panel import VideoPanel
+from gui.control_panel import ControlPanel
+from gui.vehicle_panel import VehiclePanel
+from gui.vehicle_table import VehicleTable
 
 
 class TrafficVehicleCounter:
@@ -17,437 +19,344 @@ class TrafficVehicleCounter:
     def __init__(self, root):
 
         self.root = root
-        self.root.title("Traffic Vehicle Counter")
-        self.root.geometry("1200x750")
-        self.root.minsize(1000, 650)
+        self.root.title("TrafficVision - Traffic Footage Surveillance")
+        self.root.geometry("1500x900")
+        self.root.minsize(1100, 700)
+        self.root.configure(bg="#e5e7eb")
 
-        # Video variables
-        self.video_path = None
-        self.video = None
-        self.running = False
-        self.paused = False
+        # ------------------------------------------------
+        # VIDEO
+        # ------------------------------------------------
 
-        # Detection
+        self.video_manager = VideoManager()
         self.tracker = None
-        self.counter = VehicleCounter()
-        self.confidence = 0.5
+        self.detections = []
+        self.detect_vehicles = True
+        self.video_path = None
+        self.running = False
+        self.paused = True
+        self.playback_speed = 1.0
+        self.current_frame = None
+        self.counting_line = 0.50
+        self.selected_vehicle_id = None
 
-        # Statistics
-        self.counts = {
-            "Car": 0,
-            "Motorcycle": 0,
-            "Bus": 0,
-            "Truck": 0
-        }
+        # ------------------------------------------------
+        # HEADER
+        # ------------------------------------------------
+        self.create_header()
 
-        self.fps = 0.0
-        self.previous_frame_time = time.time()
-        self.output_video = None
-        self.output_path = None
+        # ------------------------------------------------
+        # MAIN AREA
+        # ------------------------------------------------
 
-        self.setup_ui()
+        self.main_area = tk.Frame(root, bg="#e5e7eb")
+        self.main_area.pack(fill="both", expand=True)
 
-    # ---------------------------------------------------------
-    # GUI
-    # ---------------------------------------------------------
-
-    def setup_ui(self):
-
-        # Main title
-        title = ttk.Label(
-            self.root,
-            text="TRAFFIC VEHICLE COUNTER",
-            font=("Arial", 22, "bold")
+        # Video area
+        self.video_area = tk.Frame(
+            self.main_area,
+            bg="#111827"
         )
 
-        title.pack(pady=15)
-
-        # Control frame
-        control_frame = ttk.Frame(self.root)
-
-        control_frame.pack(
-            fill="x",
-            padx=20,
-            pady=10
-        )
-
-        # Select video
-        ttk.Button(
-            control_frame,
-            text="Select Video",
-            command=self.select_video
-        ).grid(
-            row=0,
-            column=0,
-            padx=5
-        )
-
-        self.video_label = ttk.Label(
-            control_frame,
-            text="No video selected"
-        )
-
-        self.video_label.grid(
-            row=0,
-            column=1,
-            padx=10
-        )
-
-        # Confidence
-        ttk.Label(
-            control_frame,
-            text="Confidence:"
-        ).grid(
-            row=0,
-            column=2,
-            padx=(20, 5)
-        )
-
-        self.confidence_var = tk.DoubleVar(
-            value=0.5
-        )
-
-        self.confidence_scale = ttk.Scale(
-            control_frame,
-            from_=0.1,
-            to=0.9,
-            variable=self.confidence_var,
-            orient="horizontal",
-            length=150
-        )
-
-        self.confidence_scale.grid(
-            row=0,
-            column=3
-        )
-
-        self.confidence_value = ttk.Label(
-            control_frame,
-            text="0.50"
-        )
-
-        self.confidence_value.grid(
-            row=0,
-            column=4,
-            padx=5
-        )
-
-        self.confidence_var.trace_add(
-            "write",
-            self.update_confidence_label
-        )
-
-        ttk.Label(
-            control_frame,
-            text="Line:"
-        ).grid(
-            row=1,
-            column=0,
-            padx=5,
-            pady=10
-        )
-
-        self.line_var = tk.DoubleVar(
-            value=0.50
-        )
-
-        self.line_scale = ttk.Scale(
-            control_frame,
-            from_=0.10,
-            to=0.90,
-            variable=self.line_var,
-            orient="horizontal",
-            length=200
-        )
-
-        self.line_scale.grid(
-            row=1,
-            column=1,
-            columnspan=2,
-            sticky="w"
-        )
-
-        self.line_value = ttk.Label(
-            control_frame,
-            text="50%"
-        )
-
-        self.line_value.grid(
-            row=1,
-            column=3
-        )
-
-        self.line_var.trace_add(
-            "write",
-            self.update_line_label
-        )
-
-        # Start
-        ttk.Button(
-            control_frame,
-            text="Start",
-            command=self.start_video
-        ).grid(
-            row=0,
-            column=5,
-            padx=5
-        )
-
-        # Pause
-        ttk.Button(
-            control_frame,
-            text="Pause",
-            command=self.pause_video
-        ).grid(
-            row=0,
-            column=6,
-            padx=5
-        )
-
-        # Stop
-        ttk.Button(
-            control_frame,
-            text="Stop",
-            command=self.stop_video
-        ).grid(
-            row=0,
-            column=7,
-            padx=5
-        )
-
-        ttk.Button(
-            control_frame,
-            text="Reset",
-            command=self.reset_application
-        ).grid(
-            row=0,
-            column=8,
-            padx=5
-        )
-
-        # Main content
-        content = ttk.Frame(self.root)
-
-        content.pack(
-            fill="both",
-            expand=True,
-            padx=20,
-            pady=10
-        )
-
-        # Video panel
-        video_frame = ttk.LabelFrame(
-            content,
-            text="Live Video"
-        )
-
-        video_frame.pack(
+        self.video_area.pack(
             side="left",
             fill="both",
-            expand=True,
-            padx=(0, 10)
+            expand=True
         )
 
-        self.video_display = ttk.Label(
-            video_frame,
-            text="Select a traffic video to begin",
-            anchor="center"
+        # Inspector
+        self.vehicle_panel = VehiclePanel(
+            self.main_area
         )
 
-        self.video_display.pack(
-            fill="both",
-            expand=True,
-            padx=10,
-            pady=10
+        # ------------------------------------------------
+        # VIDEO PANEL
+        # ------------------------------------------------
+
+        self.video_panel = VideoPanel(
+            self.video_area
         )
 
-        # Statistics panel
-        stats_frame = ttk.LabelFrame(
-            content,
-            text="Statistics",
-            width=250
+        # ------------------------------------------------
+        # CONTROLS
+        # ------------------------------------------------
+
+        callbacks = {
+
+            "open": self.open_video,
+
+            "previous_frame":
+                self.previous_frame,
+
+            "rewind":
+                self.rewind,
+
+            "play":
+                self.play_video,
+
+            "pause":
+                self.pause_video,
+
+            "fast_forward":
+                self.fast_forward,
+
+            "next_frame":
+                self.next_frame,
+
+            "zoom_in":
+                self.video_panel.zoom_in,
+
+            "zoom_out":
+                self.video_panel.zoom_out,
+
+            "reset_zoom":
+                self.video_panel.reset_zoom,
+
+            "speed":
+                self.set_playback_speed,
+
+            "toggle_ai":
+                self.toggle_ai_detection,
+        }
+
+        self.controls = ControlPanel(
+            self.video_area,
+            callbacks
         )
 
-        stats_frame.pack(
-            side="right",
-            fill="y",
-            padx=(10, 0)
+        # self.control_panel = ControlPanel(
+        #     controls_area,
+        #     callbacks
+        # )
+
+        # ------------------------------------------------
+        # TIMELINE
+        # ------------------------------------------------
+
+        self.create_timeline()
+
+        # ------------------------------------------------
+        # VEHICLE TABLE
+        # ------------------------------------------------
+
+        self.vehicle_table = VehicleTable(
+            root,
+            self.select_vehicle
         )
 
-        stats_frame.pack_propagate(False)
+        # ------------------------------------------------
+        # STATUS BAR
+        # ------------------------------------------------
 
-        self.stats_labels = {}
+        self.create_status_bar()
 
-        for vehicle_type in self.counts:
+        # ------------------------------------------------
+        # KEYBOARD SHORTCUTS
+        # ------------------------------------------------
 
-            label = ttk.Label(
-                stats_frame,
-                text=f"{vehicle_type}: 0",
-                font=("Arial", 14)
+        self.root.bind(
+            "<space>",
+            lambda event:
+                self.toggle_play_pause()
+        )
+
+        self.root.bind(
+            "<Left>",
+            lambda event:
+                self.previous_frame()
+        )
+
+        self.root.bind(
+            "<Right>",
+            lambda event:
+                self.next_frame()
+        )
+
+        self.root.bind(
+            "<Control-o>",
+            lambda event:
+                self.open_video()
+        )
+
+    # ====================================================
+    # HEADER
+    # ====================================================
+
+    def create_header(self):
+
+        header = tk.Frame(
+            self.root,
+            bg="#111827",
+            height=65
+        )
+
+        header.pack(
+            fill="x"
+        )
+
+        title = tk.Label(
+            header,
+            text="TRAFFICVISION",
+            bg="#111827",
+            fg="white",
+            font=(
+                "Segoe UI",
+                20,
+                "bold"
             )
+        )
 
-            label.pack(
-                anchor="w",
-                padx=20,
-                pady=10
-            )
-
-            self.stats_labels[vehicle_type] = label
-
-        ttk.Separator(
-            stats_frame,
-            orient="horizontal"
-        ).pack(
-            fill="x",
-            padx=15,
+        title.pack(
+            side="left",
+            padx=25,
             pady=15
         )
 
-        self.total_label = ttk.Label(
-            stats_frame,
-            text="Total: 0",
-            font=("Arial", 16, "bold")
+        subtitle = tk.Label(
+            header,
+            text="Traffic Footage Surveillance & Inspection",
+            bg="#111827",
+            fg="#9ca3af",
+            font=(
+                "Segoe UI",
+                10
+            )
         )
 
-        self.total_label.pack(
-            anchor="w",
-            padx=20,
-            pady=10
+        subtitle.pack(
+            side="left",
+            pady=18
         )
 
-        self.fps_label = ttk.Label(
-            stats_frame,
-            text="FPS: 0.0",
-            font=("Arial", 14)
+    # ====================================================
+    # TIMELINE
+    # ====================================================
+
+    def create_timeline(self):
+
+        self.timeline_frame = tk.Frame(
+            self.video_area,
+            bg="#1f2937"
         )
 
-        self.fps_label.pack(
-            anchor="w",
-            padx=20,
-            pady=10
+        self.timeline_frame.pack(
+            fill="x"
         )
 
-        # Status
-        self.status_label = ttk.Label(
+        self.current_time_label = tk.Label(
+            self.timeline_frame,
+            text="00:00:00",
+            bg="#1f2937",
+            fg="white"
+        )
+
+        self.current_time_label.pack(
+            side="left",
+            padx=10
+        )
+
+        self.timeline_var = tk.DoubleVar(
+            value=0
+        )
+
+        self.timeline = ttk.Scale(
+            self.timeline_frame,
+            from_=0,
+            to=100,
+            variable=self.timeline_var,
+            orient="horizontal",
+            command=self.seek_from_slider
+        )
+
+        self.timeline.pack(
+            side="left",
+            fill="x",
+            expand=True,
+            padx=10
+        )
+
+        self.duration_label = tk.Label(
+            self.timeline_frame,
+            text="00:00:00",
+            bg="#1f2937",
+            fg="white"
+        )
+
+        self.duration_label.pack(
+            side="right",
+            padx=10
+        )
+
+    # ====================================================
+    # STATUS BAR
+    # ====================================================
+
+    def create_status_bar(self):
+
+        self.status_frame = tk.Frame(
             self.root,
+            bg="#111827"
+        )
+
+        self.status_frame.pack(
+            fill="x"
+        )
+
+        self.status_label = tk.Label(
+            self.status_frame,
             text="Ready",
-            relief="sunken",
-            anchor="w"
+            bg="#111827",
+            fg="#d1d5db"
         )
 
         self.status_label.pack(
-            fill="x",
-            side="bottom"
+            side="left",
+            padx=15,
+            pady=8
         )
 
-    # ---------------------------------------------------------
-    # GUI actions
-    # ---------------------------------------------------------
+        self.video_info_label = tk.Label(
+            self.status_frame,
+            text="No video loaded",
+            bg="#111827",
+            fg="#9ca3af"
+        )
 
-    def select_video(self):
+        self.video_info_label.pack(
+            side="right",
+            padx=15
+        )
+
+
+    # OPEN VIDEO
+
+    def open_video(self):
 
         path = filedialog.askopenfilename(
+
             title="Select Traffic Video",
+
             filetypes=[
-                ("Video Files", "*.mp4 *.avi *.mov *.mkv"),
-                ("MP4 Files", "*.mp4"),
-                ("AVI Files", "*.avi"),
-                ("All Files", "*.*")
+                (
+                    "Video Files",
+                    "*.mp4 *.avi *.mov *.mkv *.wmv"
+                ),
+                (
+                    "All Files",
+                    "*.*"
+                )
             ]
         )
 
         if not path:
-            return
-
-        self.video_path = path
-
-        self.video_label.config(
-            text=path
-        )
-
-        self.status_label.config(
-            text="Video selected"
-        )
-
-    def update_confidence_label(self, *args):
-
-        value = self.confidence_var.get()
-
-        self.confidence_value.config(
-            text=f"{value:.2f}"
-        )
-
-    def update_statistics(self):
-
-        counts = self.counter.get_counts()
-
-        total = self.counter.get_total()
-
-        for vehicle_type in counts:
-
-            entering = counts[
-                vehicle_type
-            ]["ENTERING"]
-
-            exiting = counts[
-                vehicle_type
-            ]["EXITING"]
-
-            total_type = (
-                entering + exiting
-            )
-
-            self.stats_labels[
-                vehicle_type
-            ].config(
-                text=(
-                    f"{vehicle_type}: "
-                    f"{total_type}\n"
-                    f"  ↓ {entering} "
-                    f"↑ {exiting}"
-                )
-            )
-
-        self.total_label.config(
-            text=f"Total: {total}"
-        )
-
-    # ---------------------------------------------------------
-    # Video processing
-    # ---------------------------------------------------------
-
-    def start_video(self):
-
-        if not self.video_path:
-
-            messagebox.showwarning(
-                "No Video",
-                "Please select a traffic video first."
-            )
 
             return
 
-        if self.running:
-            return
-
-        self.confidence = self.confidence_var.get()
-
-        # Create tracker
-        self.tracker = VehicleTracker(
-            confidence=self.confidence
+        success = (
+            self.video_manager.open(path)
         )
 
-        # Create counter
-        self.counter = VehicleCounter(
-            line_position=self.line_var.get()
-        )
-
-        # Open input video
-        self.video = cv2.VideoCapture(
-            self.video_path
-        )
-
-        if not self.video.isOpened():
+        if not success:
 
             messagebox.showerror(
                 "Error",
@@ -456,166 +365,413 @@ class TrafficVehicleCounter:
 
             return
 
-        # ---------------------------------------------
-        # Video information
-        # ---------------------------------------------
+        self.tracker = VehicleTracker(
+                model_path="models/yolov8n.pt",
+                confidence=0.5
+            )
 
-        width = int(
-            self.video.get(
-                cv2.CAP_PROP_FRAME_WIDTH
+        self.video_path = path
+
+        self.running = False
+
+        self.paused = True
+
+        self.timeline.configure(
+            from_=0,
+            to=max(
+                self.video_manager.duration,
+                1
             )
         )
 
-        height = int(
-            self.video.get(
-                cv2.CAP_PROP_FRAME_HEIGHT
+        self.duration_label.config(
+            text=self.format_time(
+                self.video_manager.duration
             )
         )
 
-        fps = self.video.get(
-            cv2.CAP_PROP_FPS
+        self.video_info_label.config(
+            text=(
+                f"{self.video_manager.width} × "
+                f"{self.video_manager.height} | "
+                f"{self.video_manager.fps:.1f} FPS"
+            )
         )
-
-        if fps <= 0:
-            fps = 30.0
-
-        # ---------------------------------------------
-        # Output video
-        # ---------------------------------------------
-
-
-
-        os.makedirs(
-            "output/videos",
-            exist_ok=True
-        )
-
-        timestamp = datetime.now().strftime(
-            "%Y%m%d_%H%M%S"
-        )
-
-        self.output_path = (
-            f"output/videos/"
-            f"traffic_processed_{timestamp}.mp4"
-        )
-
-        fourcc = cv2.VideoWriter_fourcc(
-            *"mp4v"
-        )
-
-        self.output_video = cv2.VideoWriter(
-            self.output_path,
-            fourcc,
-            fps,
-            (width, height)
-        )
-
-        # ---------------------------------------------
-        # Start processing
-        # ---------------------------------------------
-
-        self.running = True
-        self.paused = False
-
-        self.previous_frame_time = time.time()
 
         self.status_label.config(
-            text="Processing video..."
+            text=(
+                f"Loaded: "
+                f"{os.path.basename(path)}"
+            )
+        )
+
+        # Display first frame
+        success, frame = (
+            self.video_manager.seek_frame(0)
+        )
+
+        if success:
+
+            self.current_frame = frame
+
+            self.video_panel.show_frame(
+                frame
+            )
+
+        self.update_timeline()
+
+    # ====================================================
+    # PLAY
+    # ====================================================
+
+    def play_video(self):
+
+        if self.video_manager.capture is None:
+
+            return
+
+        if self.running:
+
+            return
+
+        self.running = True
+
+        self.paused = False
+
+        self.status_label.config(
+            text="Playing"
         )
 
         self.process_video()
+
+    # ====================================================
+    # PAUSE
+    # ====================================================
+
+    def pause_video(self):
+
+        self.paused = True
+
+        self.running = False
+
+        self.status_label.config(
+            text="Paused"
+        )
+
+    # ====================================================
+    # TOGGLE
+    # ====================================================
+
+    def toggle_play_pause(self):
+
+        if self.running:
+
+            self.pause_video()
+
+        else:
+
+            self.play_video()
+
+    # ====================================================
+    # PROCESS VIDEO
+    # ====================================================
 
     def process_video(self):
 
         if not self.running:
             return
 
-        if self.paused:
+        success, frame = self.video_manager.read()
 
-            self.root.after(
-                100,
-                self.process_video
+        if not success:
+
+            self.running = False
+
+            self.status_label.config(
+                text="End of video"
             )
 
             return
 
-        ret, frame = self.video.read()
+        self.current_frame = frame
 
-        if not ret:
+        # -----------------------------------
+        # YOLO VEHICLE DETECTION
+        # -----------------------------------
 
-            self.stop_video()
+        if (
+            self.detect_vehicles
+            and self.tracker is not None
+        ):
 
-            return
+            self.detections = self.tracker.track(
+                frame
+            )
 
-        # -------------------------------------------------
-        # FPS
-        # -------------------------------------------------
+            # Add newly detected vehicles
+            for detection in self.detections:
 
-        current_time = time.time()
+                vehicle = {
+                    "id": detection["id"],
+                    "type": detection["type"],
+                    "confidence": detection["confidence"],
+                    "direction": "-",
+                    "plate": "UNKNOWN",
+                    "plate_confidence": 0.0,
+                    "timestamp": self.video_manager.get_current_time()
+                }
 
-        elapsed = (
-            current_time
-            - self.previous_frame_time
-        )
+                self.vehicle_table.add_vehicle(
+                    vehicle
+                )
 
-        if elapsed > 0:
+            # Draw detections
+            frame = self.draw_detections(
+                frame,
+                self.detections
+            )
 
-            self.fps = 1 / elapsed
+        # -----------------------------------
+        # COUNTING LINE
+        # -----------------------------------
 
-        self.previous_frame_time = current_time
-
-        # -------------------------------------------------
-        # Frame dimensions
-        # -------------------------------------------------
-
-        height, width = frame.shape[:2]
-
-        # -------------------------------------------------
-        # Track vehicles
-        # -------------------------------------------------
-
-        detections = self.tracker.track(
+        frame = self.draw_counting_line(
             frame
         )
 
-        # -------------------------------------------------
-        # Count vehicles
-        # -------------------------------------------------
+        # -----------------------------------
+        # DISPLAY FRAME
+        # -----------------------------------
 
-        events = self.counter.process(
-            detections,
-            height
+        self.video_panel.show_frame(
+            frame
         )
 
-        # -------------------------------------------------
-        # Counting line
-        # -------------------------------------------------
+        # -----------------------------------
+        # UPDATE TIMELINE
+        # -----------------------------------
 
-        line_y = int(
-            height * self.line_var.get()
+        self.update_timeline()
+
+        # -----------------------------------
+        # NEXT FRAME
+        # -----------------------------------
+
+        delay = int(
+            (1000 / self.video_manager.fps)
+            / self.playback_speed
         )
 
-        cv2.line(
-            frame,
-            (0, line_y),
-            (width, line_y),
-            (0, 255, 255),
-            3
+        delay = max(delay, 1)
+
+        self.root.after(
+            delay,
+            self.process_video
         )
 
-        cv2.putText(
-            frame,
-            "COUNTING LINE",
-            (20, line_y - 10),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (0, 255, 255),
-            2
+    # ====================================================
+    # PREVIOUS FRAME
+    # ====================================================
+
+    def previous_frame(self):
+
+        self.running = False
+
+        success, frame = (
+            self.video_manager.previous_frame()
         )
 
-        # -------------------------------------------------
-        # Draw vehicles
-        # -------------------------------------------------
+        if success:
+
+            self.current_frame = frame
+
+            self.video_panel.show_frame(
+                frame
+            )
+
+            self.update_timeline()
+
+    # ====================================================
+    # NEXT FRAME
+    # ====================================================
+
+    def next_frame(self):
+
+        self.running = False
+
+        success, frame = (
+            self.video_manager.next_frame()
+        )
+
+        if success:
+
+            self.current_frame = frame
+
+            self.video_panel.show_frame(
+                frame
+            )
+
+            self.update_timeline()
+
+    # ====================================================
+    # REWIND
+    # ====================================================
+
+    def rewind(self):
+
+        current = (
+            self.video_manager.get_current_time()
+        )
+
+        target = max(
+            0,
+            current - 10
+        )
+
+        success, frame = (
+            self.video_manager.seek_time(
+                target
+            )
+        )
+
+        if success:
+
+            self.current_frame = frame
+
+            self.video_panel.show_frame(
+                frame
+            )
+
+            self.update_timeline()
+
+    # ====================================================
+    # FAST FORWARD
+    # ====================================================
+
+    def fast_forward(self):
+
+        current = (
+            self.video_manager.get_current_time()
+        )
+
+        target = min(
+            self.video_manager.duration,
+            current + 10
+        )
+
+        success, frame = (
+            self.video_manager.seek_time(
+                target
+            )
+        )
+
+        if success:
+
+            self.current_frame = frame
+
+            self.video_panel.show_frame(
+                frame
+            )
+
+            self.update_timeline()
+
+    # ====================================================
+    # PLAYBACK SPEED
+    # ====================================================
+
+    def set_playback_speed(
+        self,
+        speed
+    ):
+
+        self.playback_speed = speed
+
+        self.status_label.config(
+            text=f"Playback speed: {speed}x"
+        )
+
+    # ====================================================
+    # TIMELINE
+    # ====================================================
+
+    def seek_from_slider(self, value):
+
+        if self.video_manager.capture is None:
+
+            return
+
+        if self.running:
+
+            return
+
+        seconds = float(value)
+
+        success, frame = (
+            self.video_manager.seek_time(
+                seconds
+            )
+        )
+
+        if success:
+
+            self.current_frame = frame
+
+            self.video_panel.show_frame(
+                frame
+            )
+
+            self.current_time_label.config(
+                text=self.format_time(
+                    seconds
+                )
+            )
+
+    def update_timeline(self):
+
+        current = (
+            self.video_manager.get_current_time()
+        )
+
+        self.timeline_var.set(
+            current
+        )
+
+        self.current_time_label.config(
+            text=self.format_time(
+                current
+            )
+        )
+
+    # ====================================================
+    # VEHICLE SELECTION
+    # ====================================================
+
+    def select_vehicle(
+        self,
+        vehicle
+    ):
+
+        self.selected_vehicle_id = (
+            vehicle["id"]
+        )
+
+        self.vehicle_panel.update(
+            vehicle
+        )
+
+        timestamp = vehicle.get(
+            "timestamp"
+        )
+
+        if timestamp is not None:
+
+            self.video_manager.seek_time(
+                timestamp
+            )
+
+    def draw_detections(self, frame, detections):
+
+        output = frame.copy()
 
         for detection in detections:
 
@@ -627,310 +783,180 @@ class TrafficVehicleCounter:
 
             confidence = detection["confidence"]
 
-            center_x, center_y = detection["center"]
+            # Highlight selected vehicle
+            if vehicle_id == self.selected_vehicle_id:
+
+                box_color = (255, 0, 255)
+                thickness = 4
+
+            else:
+
+                box_color = (0, 255, 0)
+                thickness = 2
 
             # Bounding box
             cv2.rectangle(
-                frame,
+                output,
                 (x1, y1),
                 (x2, y2),
-                (255, 0, 0),
-                2
+                box_color,
+                thickness
             )
 
-            # Center
-            cv2.circle(
-                frame,
-                (center_x, center_y),
-                5,
-                (0, 0, 255),
-                -1
-            )
-
-            # Vehicle label
+            # Label
             label = (
                 f"{vehicle_type} "
                 f"ID:{vehicle_id} "
                 f"{confidence:.2f}"
             )
 
-            cv2.putText(
-                frame,
+            (
+                text_width,
+                text_height
+            ), _ = cv2.getTextSize(
                 label,
-                (x1, max(y1 - 10, 20)),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.55,
-                (255, 255, 255),
                 2
             )
 
-        # -------------------------------------------------
-        # Show counting events
-        # -------------------------------------------------
-
-        for event in events:
-
-            print(
-                f"{event['type']} "
-                f"ID:{event['id']} "
-                f"{event['direction']}"
+            # Label background
+            cv2.rectangle(
+                output,
+                (
+                    x1,
+                    max(
+                        0,
+                        y1 - text_height - 10
+                    )
+                ),
+                (
+                    x1 + text_width + 10,
+                    y1
+                ),
+                box_color,
+                -1
             )
 
-            self.status_label.config(
-                text=(
-                    f"{event['type']} "
-                    f"ID:{event['id']} "
-                    f"{event['direction']}"
-                )
+            # Label text
+            cv2.putText(
+                output,
+                label,
+                (
+                    x1 + 5,
+                    max(
+                        text_height + 2,
+                        y1 - 5
+                    )
+                ),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                (0, 0, 0),
+                2
             )
 
-        # -------------------------------------------------
-        # FPS overlay
-        # -------------------------------------------------
+            # Center point
+            center_x, center_y = detection["center"]
 
-        cv2.putText(
+            cv2.circle(
+                output,
+                (center_x, center_y),
+                5,
+                (0, 0, 255),
+                -1
+            )
+
+        return output
+
+    def draw_counting_line(self, frame):
+
+        height, width = (
+            frame.shape[:2]
+        )
+
+        line_y = int(
+            height *
+            self.counting_line
+        )
+
+        cv2.line(
+
             frame,
-            f"FPS: {self.fps:.1f}",
-            (20, 35),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            (0, 255, 0),
+
+            (0, line_y),
+
+            (width, line_y),
+
+            (0, 0, 255),
+
             2
         )
 
-        # -------------------------------------------------
-        # Total overlay
-        # -------------------------------------------------
-
-        total = self.counter.get_total()
-
         cv2.putText(
+
             frame,
-            f"Vehicles: {total}",
-            (20, 70),
+
+            "COUNTING LINE",
+
+            (
+                10,
+                line_y - 10
+            ),
+
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            (0, 255, 0),
+
+            0.6,
+
+            (0, 0, 255),
+
             2
         )
 
-        # -------------------------------------------------
-        # Save annotated video
-        # -------------------------------------------------
+        return frame
 
-        if self.output_video:
+    # ====================================================
+    # TIME FORMAT
+    # ====================================================
 
-            self.output_video.write(
-                frame
-            )
+    @staticmethod
+    def format_time(seconds):
 
-        # -------------------------------------------------
-        # Update GUI
-        # -------------------------------------------------
-
-        self.update_statistics()
-
-        self.fps_label.config(
-            text=f"FPS: {self.fps:.1f}"
+        seconds = int(
+            max(0, seconds)
         )
 
-        self.display_frame(frame)
+        hours = seconds // 3600
 
-        # -------------------------------------------------
-        # Continue
-        # -------------------------------------------------
+        minutes = (
+            seconds % 3600
+        ) // 60
 
-        self.root.after(
-            1,
-            self.process_video
+        seconds = seconds % 60
+
+        return (
+            f"{hours:02d}:"
+            f"{minutes:02d}:"
+            f"{seconds:02d}"
         )
 
-    def display_frame(self, frame):
-
-        # Convert BGR → RGB
-        frame = cv2.cvtColor(
-            frame,
-            cv2.COLOR_BGR2RGB
-        )
-
-        image = Image.fromarray(frame)
-
-        # Resize while maintaining aspect ratio
-        image.thumbnail(
-            (850, 600)
-        )
-
-        photo = ImageTk.PhotoImage(
-            image=image
-        )
-
-        self.video_display.config(
-            image=photo,
-            text=""
-        )
-
-        self.video_display.image = photo
-
-    def update_line_label(self, *args):
-
-        value = self.line_var.get()
-
-        self.line_value.config(
-            text=f"{value * 100:.0f}%"
-        )
-
-    # ---------------------------------------------------------
-    # Controls
-    # ---------------------------------------------------------
-    
-    def pause_video(self):
-
-        if not self.running:
-            return
-
-        self.paused = not self.paused
-
-        if self.paused:
-
-            self.status_label.config(
-                text="Video paused"
-            )
-
-        else:
-
-            self.status_label.config(
-                text="Video resumed"
-            )
-
-    def stop_video(self):
-
-        self.running = False
-        self.paused = False
-
-        if self.video:
-
-            self.video.release()
-
-            self.video = None
-
-        if self.output_video:
-
-            self.output_video.release()
-
-            self.output_video = None
-
-        # Save CSV reports
-        self.save_reports()
-
-        self.status_label.config(
-            text="Processing stopped"
-        )
-
-    # ---------------------------------------------
-    # Summary report
-    # ---------------------------------------------
-    
-    def save_reports(self):
-
-        if not self.counter:
-            return
-
-        os.makedirs(
-            "output/reports",
-            exist_ok=True
-        )
-
-        from datetime import datetime
-
-        timestamp = datetime.now().strftime(
-            "%Y%m%d_%H%M%S"
-        )
-
-        summary_path = (
-            f"output/reports/"
-            f"vehicle_summary_{timestamp}.csv"
-        )
-
-        with open(
-            summary_path,
-            "w",
-            newline=""
-        ) as file:
-
-            writer = csv.writer(file)
-
-            writer.writerow([
-                "Vehicle Type",
-                "Entering",
-                "Exiting",
-                "Total"
-            ])
-
-            counts = self.counter.get_counts()
-
-            for vehicle_type in counts:
-
-                entering = (
-                    counts[vehicle_type]["ENTERING"]
-                )
-
-                exiting = (
-                    counts[vehicle_type]["EXITING"]
-                )
-
-                writer.writerow([
-                    vehicle_type,
-                    entering,
-                    exiting,
-                    entering + exiting
-                ])
-
-            writer.writerow([])
-
-            writer.writerow([
-                "TOTAL",
-                sum(
-                    counts[v]["ENTERING"]
-                    for v in counts
-                ),
-                sum(
-                    counts[v]["EXITING"]
-                    for v in counts
-                ),
-                self.counter.get_total()
-            ])
-
-        print(
-            f"Summary report saved: "
-            f"{summary_path}"
-        )
-
-    # ---------------------------------------------------------
-    # Application close and reset
-    # ---------------------------------------------------------
-
-    def reset_application(self):
-
-        self.stop_video()
-
-        self.counter = VehicleCounter(
-            line_position=self.line_var.get()
-        )
-
-        self.update_statistics()
-
-        self.fps = 0.0
-
-        self.fps_label.config(
-            text="FPS: 0.0"
-        )
-
-        self.status_label.config(
-            text="Reset"
-        )
+    # ====================================================
+    # CLOSE
+    # ====================================================
 
     def close_application(self):
 
-        self.stop_video()
+        self.running = False
+
+        self.video_manager.release()
 
         self.root.destroy()
+
+    def toggle_ai_detection(self):
+
+        self.detect_vehicles = not self.detect_vehicles
+
+        state = "ON" if self.detect_vehicles else "OFF"
+
+        self.status_label.config(
+            text=f"Vehicle detection: {state}"
+        )

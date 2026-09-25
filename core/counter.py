@@ -93,18 +93,17 @@ class VehicleCounter:
 
             if direction:
 
-                self.counts[
-                    vehicle_type
-                ][direction] += 1
+                self.counts[vehicle_type][direction] += 1
 
-                self.counted_ids.add(
-                    vehicle_id
-                )
+                self.counted_ids.add(vehicle_id)
 
                 events.append({
                     "id": vehicle_id,
                     "type": vehicle_type,
-                    "direction": direction
+                    "direction": direction,
+                    "confidence": detection["confidence"],
+                    "bbox": detection["bbox"],
+                    "center": detection["center"]
                 })
 
         return events

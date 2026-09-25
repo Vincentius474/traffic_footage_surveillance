@@ -9,8 +9,11 @@ class VehicleTracker:
         7: "Truck"
     }
 
-    def __init__(self, model_path="../models/yolov8n.pt", confidence=0.5):
-
+    def __init__(
+        self,
+        model_path="models/yolov8n.pt",
+        confidence=0.5
+    ):
         self.model = YOLO(model_path)
         self.confidence = confidence
 
@@ -34,11 +37,10 @@ class VehicleTracker:
         if result.boxes is None:
             return detections
 
-        # Tracking IDs are not available yet
-        if result.boxes.id is None:
-            return detections
-
         boxes = result.boxes
+
+        if boxes.id is None:
+            return detections
 
         for box, track_id, class_id, confidence in zip(
             boxes.xyxy,
@@ -48,16 +50,14 @@ class VehicleTracker:
         ):
 
             class_id = int(class_id)
-            track_id = int(track_id)
-            confidence = float(confidence)
 
             if class_id not in self.VEHICLE_CLASSES:
                 continue
 
-            x1, y1, x2, y2 = map(
-                int,
-                box
-            )
+            track_id = int(track_id)
+            confidence = float(confidence)
+
+            x1, y1, x2, y2 = map(int, box)
 
             center_x = (x1 + x2) // 2
             center_y = (y1 + y2) // 2
@@ -65,6 +65,7 @@ class VehicleTracker:
             detections.append({
                 "id": track_id,
                 "type": self.VEHICLE_CLASSES[class_id],
+                "class_id": class_id,
                 "confidence": confidence,
                 "bbox": (x1, y1, x2, y2),
                 "center": (center_x, center_y)

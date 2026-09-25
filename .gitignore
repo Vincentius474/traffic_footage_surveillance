@@ -1,2 +1,6 @@
 output/reports/*.*
 output/videos/*.*
+core/__pycache__/*.*
+gui/__pycache__/*.*
+tests/__pycache__/*.*
+
