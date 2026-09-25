@@ -8,6 +8,8 @@ import cv2
 
 from core.video_manager import VideoManager
 from core.tracker import VehicleTracker
+from core.capture_manager import CaptureManager
+from core.plate_detector import PlateDetector
 from gui.video_panel import VideoPanel
 from gui.control_panel import ControlPanel
 from gui.vehicle_panel import VehiclePanel
@@ -27,9 +29,11 @@ class TrafficVehicleCounter:
         # ------------------------------------------------
         # VIDEO
         # ------------------------------------------------
-
+    
         self.video_manager = VideoManager()
         self.tracker = None
+        self.capture_manager = CaptureManager()
+        self.vehicle_history = {}
         self.detections = []
         self.detect_vehicles = True
         self.video_path = None
@@ -37,8 +41,9 @@ class TrafficVehicleCounter:
         self.paused = True
         self.playback_speed = 1.0
         self.current_frame = None
-        self.counting_line = 0.50
+        self.counting_line = 0.80
         self.selected_vehicle_id = None
+        self.plate_detector = None
 
         # ------------------------------------------------
         # HEADER
@@ -365,10 +370,19 @@ class TrafficVehicleCounter:
 
             return
 
+        self.vehicle_history.clear()
+        self.detections.clear()
+        self.selected_vehicle_id = None
+
         self.tracker = VehicleTracker(
                 model_path="models/yolov8n.pt",
                 confidence=0.5
             )
+
+        self.plate_detector = PlateDetector(
+            model_path="models/license_plate_model.pt",
+            confidence=0.25
+        )
 
         self.video_path = path
 
@@ -508,21 +522,68 @@ class TrafficVehicleCounter:
                 frame
             )
 
-            # Add newly detected vehicles
             for detection in self.detections:
 
-                vehicle = {
-                    "id": detection["id"],
-                    "type": detection["type"],
-                    "confidence": detection["confidence"],
-                    "direction": "-",
-                    "plate": "UNKNOWN",
-                    "plate_confidence": 0.0,
-                    "timestamp": self.video_manager.get_current_time()
-                }
+                vehicle_id = detection["id"]
 
-                self.vehicle_table.add_vehicle(
-                    vehicle
+                # Create history if necessary
+                if vehicle_id not in self.vehicle_history:
+
+                    self.vehicle_history[vehicle_id] = {
+                        "best_confidence": detection["confidence"],
+                        "best_frame": frame.copy(),
+                        "type": detection["type"],
+                        "previous_y": detection["center"][1],
+                        "captured": False
+                    }
+
+                history = self.vehicle_history[
+                    vehicle_id
+                ]
+
+                # -------------------------------------
+                # CHECK CROSSING BEFORE UPDATING
+                # -------------------------------------
+
+                direction = self.check_vehicle_crossing(
+                    detection,
+                    frame.shape[0]
+                )
+
+                # -------------------------------------
+                # UPDATE BEST FRAME
+                # -------------------------------------
+
+                if (
+                    detection["confidence"]
+                    > history["best_confidence"]
+                ):
+
+                    history["best_confidence"] = (
+                        detection["confidence"]
+                    )
+
+                    history["best_frame"] = frame.copy()
+
+                # -------------------------------------
+                # CAPTURE EVENT
+                # -------------------------------------
+
+                if direction is not None:
+
+                    self.capture_vehicle_event(
+                        detection,
+                        direction
+                    )
+
+                    history["captured"] = True
+
+                # -------------------------------------
+                # UPDATE POSITION
+                # -------------------------------------
+
+                history["previous_y"] = (
+                    detection["center"][1]
                 )
 
             # Draw detections
@@ -950,6 +1011,235 @@ class TrafficVehicleCounter:
         self.video_manager.release()
 
         self.root.destroy()
+
+    def update_vehicle_history(
+        self,
+        detection,
+        frame
+    ):
+
+        vehicle_id = detection["id"]
+
+        confidence = detection["confidence"]
+
+        vehicle_type = detection["type"]
+
+        center_x, center_y = detection["center"]
+
+        if vehicle_id not in self.vehicle_history:
+
+            self.vehicle_history[vehicle_id] = {
+                "best_confidence": confidence,
+                "best_frame": frame.copy(),
+                "type": vehicle_type,
+                "previous_y": center_y,
+                "captured": False
+            }
+
+        else:
+
+            history = self.vehicle_history[vehicle_id]
+
+            # Keep the frame with the highest confidence
+            if confidence > history["best_confidence"]:
+
+                history["best_confidence"] = confidence
+
+                history["best_frame"] = frame.copy()
+
+            history["previous_y"] = center_y
+
+    def check_vehicle_crossing(
+        self,
+        detection,
+        frame_height
+    ):
+
+        vehicle_id = detection["id"]
+
+        center_y = detection["center"][1]
+
+        line_y = int(
+            frame_height * self.counting_line
+        )
+
+        history = self.vehicle_history.get(
+            vehicle_id
+        )
+
+        if history is None:
+            return None
+
+        previous_y = history["previous_y"]
+
+        if history["captured"]:
+            return None
+
+        direction = None
+
+        # Moving downward
+        if (
+            previous_y < line_y
+            and center_y >= line_y
+        ):
+
+            direction = "ENTERING"
+
+        # Moving upward
+        elif (
+            previous_y > line_y
+            and center_y <= line_y
+        ):
+
+            direction = "EXITING"
+
+        return direction
+
+    def capture_vehicle_event(
+        self,
+        detection,
+        direction
+    ):
+
+        vehicle_id = detection["id"]
+
+        history = self.vehicle_history[
+            vehicle_id
+        ]
+
+        best_frame = history["best_frame"]
+
+        vehicle_type = detection["type"]
+
+        confidence = history["best_confidence"]
+
+        # -------------------------------------
+        # CROP VEHICLE
+        # -------------------------------------
+
+        vehicle_crop = self.crop_vehicle(
+            best_frame,
+            detection
+        )
+
+        if vehicle_crop is None:
+
+            self.status_label.config(
+                text=(
+                    f"Could not capture "
+                    f"vehicle ID:{vehicle_id}"
+                )
+            )
+
+            return
+
+        plates = self.plate_detector.detect(
+            vehicle_crop
+        )
+
+        plate_image = None
+        plate_confidence = 0.0
+
+        if plates:
+
+            best_plate = max(
+                plates,
+                key=lambda p: p["confidence"]
+            )
+
+            plate_image = self.crop_plate(
+                vehicle_crop,
+                best_plate
+            )
+
+            plate_confidence = (
+                best_plate["confidence"]
+            )
+
+        # -------------------------------------
+        # SAVE VEHICLE
+        # -------------------------------------
+
+        event = self.capture_manager.capture_vehicle(
+
+            vehicle_image=vehicle_crop,
+
+            vehicle_id=vehicle_id,
+
+            vehicle_type=vehicle_type,
+
+            confidence=confidence,
+
+            direction=direction,
+
+            plate_number="UNKNOWN",
+
+            plate_confidence=0.0,
+
+            plate_image=None
+        )
+
+        self.status_label.config(
+            text=(
+                f"Captured {vehicle_type} "
+                f"ID:{vehicle_id} "
+                f"({direction})"
+            )
+        )
+
+    def crop_vehicle(self, frame, detection):
+        x1, y1, x2, y2 = detection["bbox"]
+
+        height, width = frame.shape[:2]
+
+        # Keep coordinates inside the frame
+        x1 = max(0, x1)
+        y1 = max(0, y1)
+        x2 = min(width, x2)
+        y2 = min(height, y2)
+
+        if x2 <= x1 or y2 <= y1:
+            return None
+
+        vehicle_crop = frame[y1:y2, x1:x2]
+
+        if vehicle_crop.size == 0:
+            return None
+
+        return vehicle_crop.copy()
+
+    def crop_plate(
+        self,
+        vehicle_image,
+        plate_detection
+    ):
+
+        x1, y1, x2, y2 = (
+            plate_detection["bbox"]
+        )
+
+        height, width = (
+            vehicle_image.shape[:2]
+        )
+
+        x1 = max(0, x1)
+        y1 = max(0, y1)
+
+        x2 = min(width, x2)
+        y2 = min(height, y2)
+
+        if x2 <= x1 or y2 <= y1:
+            return None
+
+        plate_crop = vehicle_image[
+            y1:y2,
+            x1:x2
+        ]
+
+        if plate_crop.size == 0:
+            return None
+
+        return plate_crop.copy()
 
     def toggle_ai_detection(self):
 

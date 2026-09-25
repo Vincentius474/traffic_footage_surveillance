@@ -1,6 +1,10 @@
 output/reports/*.*
 output/videos/*.*
+output/plates/*.*
+output/vehicle_data/*.*
+output/vehicles/*.*
 core/__pycache__/*.*
 gui/__pycache__/*.*
 tests/__pycache__/*.*
+
 

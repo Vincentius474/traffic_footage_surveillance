@@ -5,17 +5,20 @@ class PlateDetector:
 
     def __init__(
         self,
-        model_path="../models/license_plate_model.pt",
-        confidence=0.30
+        model_path="models/license_plate_model.pt",
+        confidence=0.25
     ):
 
-        self.model = YOLO(model_path)
+        self.model = YOLO(
+            model_path
+        )
+
         self.confidence = confidence
 
     def detect(self, vehicle_image):
 
         results = self.model.predict(
-            source=vehicle_image,
+            vehicle_image,
             conf=self.confidence,
             verbose=False
         )
@@ -35,11 +38,23 @@ class PlateDetector:
             result.boxes.conf
         ):
 
-            x1, y1, x2, y2 = map(int, box)
+            confidence = float(
+                confidence
+            )
+
+            x1, y1, x2, y2 = map(
+                int,
+                box
+            )
 
             plates.append({
-                "bbox": (x1, y1, x2, y2),
-                "confidence": float(confidence)
+                "bbox": (
+                    x1,
+                    y1,
+                    x2,
+                    y2
+                ),
+                "confidence": confidence
             })
 
         return plates
