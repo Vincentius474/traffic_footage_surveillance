@@ -1,75 +1,110 @@
+import re
 import cv2
-import pytesseract
-
+import easyocr
 
 class PlateReader:
 
     def __init__(self):
 
-        self.tesseract_available = True
+        self.reader = easyocr.Reader(
+            ["en"],
+            gpu=False
+        )
+
+    def preprocess(self, plate_image):
+
+        if plate_image is None:
+            return None
+
+        # Resize small plates
+        height, width = plate_image.shape[:2]
+
+        scale = 3
+
+        resized = cv2.resize(
+            plate_image,
+            (
+                width * scale,
+                height * scale
+            ),
+            interpolation=cv2.INTER_CUBIC
+        )
+
+        # Convert to grayscale
+        gray = cv2.cvtColor(
+            resized,
+            cv2.COLOR_BGR2GRAY
+        )
+
+        # Improve contrast
+        gray = cv2.equalizeHist(
+            gray
+        )
+
+        # Reduce noise
+        gray = cv2.GaussianBlur(
+            gray,
+            (3, 3),
+            0
+        )
+
+        return gray
+
+    def clean_text(self, text):
+
+        text = text.upper()
+
+        # Remove spaces and special characters
+        text = re.sub(
+            r"[^A-Z0-9]",
+            "",
+            text
+        )
+
+        return text
 
     def read(self, plate_image):
 
         if plate_image is None:
             return "UNKNOWN", 0.0
 
-        if plate_image.size == 0:
+        processed = self.preprocess(
+            plate_image
+        )
+
+        if processed is None:
             return "UNKNOWN", 0.0
 
-        try:
+        results = self.reader.readtext(
+            processed
+        )
 
-            gray = cv2.cvtColor(
-                plate_image,
-                cv2.COLOR_BGR2GRAY
-            )
-
-            # Increase plate size
-            gray = cv2.resize(
-                gray,
-                None,
-                fx=4,
-                fy=4,
-                interpolation=cv2.INTER_CUBIC
-            )
-
-            # Reduce noise
-            gray = cv2.GaussianBlur(
-                gray,
-                (3, 3),
-                0
-            )
-
-            # Threshold
-            threshold = cv2.threshold(
-                gray,
-                0,
-                255,
-                cv2.THRESH_BINARY + cv2.THRESH_OTSU
-            )[1]
-
-            text = pytesseract.image_to_string(
-                threshold,
-                config="--psm 7"
-            )
-
-            text = "".join(
-                character
-                for character in text
-                if character.isalnum()
-            )
-
-            text = text.upper()
-
-            if not text:
-
-                return "UNKNOWN", 0.0
-
-            return text, 1.0
-
-        except Exception as error:
-
-            print(
-                f"OCR error: {error}"
-            )
-
+        if not results:
             return "UNKNOWN", 0.0
+
+        best_text = ""
+        best_confidence = 0.0
+
+        for _, text, confidence in results:
+
+            cleaned = self.clean_text(
+                text
+            )
+
+            if not cleaned:
+                continue
+
+            if confidence > best_confidence:
+
+                best_text = cleaned
+                best_confidence = float(
+                    confidence
+                )
+
+        if not best_text:
+            return "UNKNOWN", 0.0
+
+        return (
+            best_text,
+            best_confidence
+        )

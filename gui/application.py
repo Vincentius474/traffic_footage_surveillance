@@ -10,6 +10,8 @@ from core.video_manager import VideoManager
 from core.tracker import VehicleTracker
 from core.capture_manager import CaptureManager
 from core.plate_detector import PlateDetector
+from core.plate_reader import PlateReader
+
 from gui.video_panel import VideoPanel
 from gui.control_panel import ControlPanel
 from gui.vehicle_panel import VehiclePanel
@@ -44,6 +46,7 @@ class TrafficVehicleCounter:
         self.counting_line = 0.80
         self.selected_vehicle_id = None
         self.plate_detector = None
+        self.plate_reader = None
 
         # ------------------------------------------------
         # HEADER
@@ -383,6 +386,8 @@ class TrafficVehicleCounter:
             model_path="models/license-plate-finetune-v1n.pt",
             confidence=0.25
         )
+
+        self.plate_reader = PlateReader()
 
         self.video_path = path
 
@@ -1150,8 +1155,11 @@ class TrafficVehicleCounter:
         # -------------------------------------
 
         plate_image = None
-
         plate_confidence = 0.0
+
+        plate_number = "UNKNOWN"
+
+        ocr_confidence = 0.0
 
         if plates:
 
@@ -1170,6 +1178,21 @@ class TrafficVehicleCounter:
                 best_plate
             )
 
+            # ---------------------------------
+            # OCR
+            # ---------------------------------
+
+            if (
+                plate_image is not None
+                and self.plate_reader is not None
+            ):
+
+                plate_number, ocr_confidence = (
+                    self.plate_reader.read(
+                        plate_image
+                    )
+                )
+
         # -------------------------------------
         # CAPTURE EVENT
         # -------------------------------------
@@ -1186,9 +1209,9 @@ class TrafficVehicleCounter:
 
             direction=direction,
 
-            plate_number="UNKNOWN",
+            plate_number=plate_number,
 
-            plate_confidence=plate_confidence,
+            plate_confidence=ocr_confidence,
 
             plate_image=plate_image
         )
@@ -1197,12 +1220,21 @@ class TrafficVehicleCounter:
         # STATUS
         # -------------------------------------
 
-        if plate_image is not None:
+        if plate_image is None:
 
             status = (
                 f"Captured {vehicle_type} "
                 f"ID:{vehicle_id} | "
-                f"Plate detected"
+                f"No plate detected"
+            )
+
+        elif plate_number == "UNKNOWN":
+
+            status = (
+                f"Captured {vehicle_type} "
+                f"ID:{vehicle_id} | "
+                f"Plate detected | "
+                f"OCR failed"
             )
 
         else:
@@ -1210,7 +1242,7 @@ class TrafficVehicleCounter:
             status = (
                 f"Captured {vehicle_type} "
                 f"ID:{vehicle_id} | "
-                f"No plate detected"
+                f"Plate: {plate_number}"
             )
 
         self.status_label.config(
