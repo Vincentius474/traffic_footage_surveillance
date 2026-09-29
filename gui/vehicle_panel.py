@@ -115,57 +115,19 @@ class VehiclePanel:
             pady=(0, 5)
         )
 
-        # self.vehicle_image_label = tk.Label(
-        #     self.frame,
-        #     text="No vehicle image",
-        #     bg="#e2e8f0",
-        #     fg="#64748b"
-        # )
-
-        # self.vehicle_image_label.pack(
-        #     fill="x",
-        #     padx=20
-        # )
-
         self.vehicle_image_label = tk.Label(
             self.frame,
             text="No vehicle image",
             bg="#e2e8f0",
             fg="#64748b",
-            width=100,
-            height=100
+            width=150,
+            height=150
         )
 
         self.vehicle_image_label.pack(
             fill="x",
             padx=20
         )
-
-        # plate_title = tk.Label(
-        #     self.frame,
-        #     text="PLATE IMAGE",
-        #     bg="#f8fafc",
-        #     fg="#111827",
-        #     font=("Segoe UI", 10, "bold")
-        # )
-
-        # plate_title.pack(
-        #     anchor="w",
-        #     padx=20,
-        #     pady=(10, 5)
-        # )
-
-        # self.plate_image_label = tk.Label(
-        #     self.frame,
-        #     text="No plate image",
-        #     bg="#e2e8f0",
-        #     fg="#64748b"
-        # )
-
-        # self.plate_image_label.pack(
-        #     fill="x",
-        #     padx=20
-        # )
 
         plate_title = tk.Label(
             self.frame,
@@ -186,8 +148,8 @@ class VehiclePanel:
             text="No plate image",
             bg="#e2e8f0",
             fg="#64748b",
-            width=70,
-            height=20
+            width=80,
+            height=40
         )
 
         self.plate_image_label.pack(
@@ -200,7 +162,6 @@ class VehiclePanel:
             bg="#f8fafc"
         )
 
-        # Removed bottom padding here
         button_row.pack(
             fill="x",
             padx=20,
