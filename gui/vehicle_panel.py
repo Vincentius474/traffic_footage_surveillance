@@ -21,8 +21,8 @@ class VehiclePanel:
         self.frame.pack_propagate(False)
         self.vehicle_photo = None
         self.plate_photo = None
-        self.vehicle_img_width = 290
-        self.plate_img_width = 290
+        self.vehicle_img_width = 200
+        self.plate_img_width = 100
 
         title = tk.Label(
             self.frame,
@@ -32,13 +32,9 @@ class VehiclePanel:
             font=("Segoe UI", 14, "bold")
         )
 
-        title.pack(
-            pady=(0, 15)
-        )
+        title.pack(pady=(0, 15))
 
-        ttk.Separator(
-            self.frame
-        ).pack(
+        ttk.Separator(self.frame).pack(
             fill="x",
             padx=15
         )
@@ -99,9 +95,7 @@ class VehiclePanel:
 
             self.details[field] = value
 
-        ttk.Separator(
-            self.frame
-        ).pack(
+        ttk.Separator(self.frame).pack(
             fill="y",
             padx=15,
             pady=10
@@ -121,12 +115,25 @@ class VehiclePanel:
             pady=(0, 5)
         )
 
-        # Removed fixed width/height so the image can size itself
+        # self.vehicle_image_label = tk.Label(
+        #     self.frame,
+        #     text="No vehicle image",
+        #     bg="#e2e8f0",
+        #     fg="#64748b"
+        # )
+
+        # self.vehicle_image_label.pack(
+        #     fill="x",
+        #     padx=20
+        # )
+
         self.vehicle_image_label = tk.Label(
             self.frame,
             text="No vehicle image",
             bg="#e2e8f0",
-            fg="#64748b"
+            fg="#64748b",
+            width=100,
+            height=100
         )
 
         self.vehicle_image_label.pack(
@@ -134,9 +141,31 @@ class VehiclePanel:
             padx=20
         )
 
-        # ---------------------------------
-        # PLATE IMAGE
-        # ---------------------------------
+        # plate_title = tk.Label(
+        #     self.frame,
+        #     text="PLATE IMAGE",
+        #     bg="#f8fafc",
+        #     fg="#111827",
+        #     font=("Segoe UI", 10, "bold")
+        # )
+
+        # plate_title.pack(
+        #     anchor="w",
+        #     padx=20,
+        #     pady=(10, 5)
+        # )
+
+        # self.plate_image_label = tk.Label(
+        #     self.frame,
+        #     text="No plate image",
+        #     bg="#e2e8f0",
+        #     fg="#64748b"
+        # )
+
+        # self.plate_image_label.pack(
+        #     fill="x",
+        #     padx=20
+        # )
 
         plate_title = tk.Label(
             self.frame,
@@ -152,12 +181,13 @@ class VehiclePanel:
             pady=(10, 5)
         )
 
-        # Removed fixed width/height so the image can size itself
         self.plate_image_label = tk.Label(
             self.frame,
             text="No plate image",
             bg="#e2e8f0",
-            fg="#64748b"
+            fg="#64748b",
+            width=70,
+            height=20
         )
 
         self.plate_image_label.pack(

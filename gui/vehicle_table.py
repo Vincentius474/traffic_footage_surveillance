@@ -51,7 +51,6 @@ class VehicleTable:
 
         for column in columns:
             self.tree.heading(column, text=headings[column])
-            # self.tree.column(column, width=60, stretch=False)
 
         self.tree.column("id", width=20)
         self.tree.column("type", width=50)
