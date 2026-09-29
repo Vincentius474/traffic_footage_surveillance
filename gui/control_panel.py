@@ -1,11 +1,10 @@
 import tkinter as tk
 from tkinter import ttk
 
-
 class ControlPanel:
 
     def __init__(self, parent, callbacks):
-
+        '''Initialize the control panel with the parent widget and callbacks.'''
         self.parent = parent
         self.callbacks = callbacks
 
@@ -16,11 +15,10 @@ class ControlPanel:
         )
 
         self.frame.pack(fill="x")
-
         self.create_controls()
 
     def create_controls(self):
-
+        '''Create the control buttons and speed selector.'''
         self.create_button(
             "Open Video",
             self.callbacks["open"],
@@ -28,49 +26,49 @@ class ControlPanel:
         )
 
         self.create_button(
-            "◀ Frame",
+            "Prev Frame",
             self.callbacks["previous_frame"],
             1
         )
 
         self.create_button(
-            "◀◀",
+            "Backward",
             self.callbacks["rewind"],
             2
         )
 
         self.create_button(
-            "▶ Play",
+            "Play",
             self.callbacks["play"],
             3
         )
 
         self.create_button(
-            "⏸ Pause",
+            "Pause",
             self.callbacks["pause"],
             4
         )
 
         self.create_button(
-            "▶▶",
+            "Fast Forward",
             self.callbacks["fast_forward"],
             5
         )
 
         self.create_button(
-            "Frame ▶",
+            "Next Frame",
             self.callbacks["next_frame"],
             6
         )
 
         self.create_button(
-            "🔍+",
+            "+",
             self.callbacks["zoom_in"],
             7
         )
 
         self.create_button(
-            "🔍-",
+            "-",
             self.callbacks["zoom_out"],
             8
         )
@@ -91,10 +89,7 @@ class ControlPanel:
             padx=(20, 5)
         )
 
-        self.speed_var = tk.StringVar(
-            value="1.0x"
-        )
-
+        self.speed_var = tk.StringVar(value="1.0x")
         speed_box = ttk.Combobox(
             self.frame,
             textvariable=self.speed_var,
@@ -127,9 +122,9 @@ class ControlPanel:
             self.frame,
             text="AI: ON",
             command=self.toggle_ai,
-            bg="#2563eb",
+            bg="#0F1420",
             fg="white",
-            activebackground="#1d4ed8",
+            activebackground="#0a0e1b",
             activeforeground="white",
             relief="flat",
             padx=10,
@@ -143,7 +138,7 @@ class ControlPanel:
         )
 
     def create_button(self, text, command, column):
-
+        '''Create a button in the control panel.'''
         button = tk.Button(
             self.frame,
             text=text,
@@ -165,15 +160,17 @@ class ControlPanel:
         )
 
     def change_speed(self, event=None):
-
+        '''Handle speed change from the combobox.'''
         value = self.speed_var.get()
-
-        speed = float(
-            value.replace("x", "")
-        )
-
+        speed = float(value.replace("x", ""))
         self.callbacks["speed"](speed)
 
     def toggle_ai(self):
-
+        '''Toggle the AI detection on or off.'''
+        self.ai_button.config(
+            text="AI: OFF" if self.ai_button.cget("text") == "AI: ON" else "AI: ON"
+        )
         self.callbacks["toggle_ai"]()
+        
+
+        

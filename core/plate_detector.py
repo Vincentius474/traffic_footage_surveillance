@@ -1,23 +1,15 @@
 from ultralytics import YOLO
 
-
 class PlateDetector:
 
-    def __init__(
-        self,
-        model_path="models/license-plate-finetune-v1n.pt",
-        confidence=0.25
-    ):
-
+    def __init__(self, model_path="models/license-plate-finetune-v1n.pt", confidence=0.25):
         self.model = YOLO(model_path)
-
         self.confidence = confidence
 
     def detect(self, vehicle_image):
-
+        '''Detect number plates'''
         if vehicle_image is None:
             return []
-
         results = self.model.predict(
             source=vehicle_image,
             conf=self.confidence,
@@ -25,12 +17,10 @@ class PlateDetector:
         )
 
         plates = []
-
         if not results:
             return plates
 
         result = results[0]
-
         if result.boxes is None:
             return plates
 
@@ -39,22 +29,11 @@ class PlateDetector:
             result.boxes.conf
         ):
 
-            confidence = float(
-                confidence
-            )
-
-            x1, y1, x2, y2 = map(
-                int,
-                box
-            )
+            confidence = float(confidence)
+            x1, y1, x2, y2 = map(int, box)
 
             plates.append({
-                "bbox": (
-                    x1,
-                    y1,
-                    x2,
-                    y2
-                ),
+                "bbox": (x1, y1, x2, y2),
                 "confidence": confidence
             })
 

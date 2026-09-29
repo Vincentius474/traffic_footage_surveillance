@@ -1,12 +1,12 @@
+import os
 import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
-import os
 
 class VehiclePanel:
 
     def __init__(self, parent):
-
+        ''' Initialize the vehicle inspector panel '''
         self.frame = tk.Frame(
             parent,
             bg="#f3f4f6",
@@ -278,66 +278,38 @@ class VehiclePanel:
         try:
 
             image = Image.open(image_path)
-            image = self._resize_to_width(
-                image,
-                self.vehicle_img_width
-            )
-
+            image = self._resize_to_width(image, self.vehicle_img_width)
             self.vehicle_photo = ImageTk.PhotoImage(image)
-            self.vehicle_image_label.config(
-                image=self.vehicle_photo,
-                text=""
-            )
+            self.vehicle_image_label.config(image=self.vehicle_photo, text="")
 
         except Exception:
 
-            self.vehicle_image_label.config(
-                image="",
-                text="Unable to load image"
-            )
+            self.vehicle_image_label.config(image="", text="Unable to load image")
             self.vehicle_photo = None
 
     def show_plate_image(self, image_path):
         ''' Display the plate image in the inspector (full width) '''
 
         if not image_path:
-            self.plate_image_label.config(
-                image="",
-                text="No plate image"
-            )
-
+            self.plate_image_label.config(image="", text="No plate image")
             self.plate_photo = None
             return
 
         if not os.path.exists(image_path):
-            self.plate_image_label.config(
-                image="",
-                text="Plate image unavailable"
-            )
-
+            self.plate_image_label.config(image="", text="Plate image unavailable")
             self.plate_photo = None
             return
 
         try:
 
             image = Image.open(image_path)
-            image = self._resize_to_width(
-                image,
-                self.plate_img_width
-            )
-
+            image = self._resize_to_width(image, self.plate_img_width)
             self.plate_photo = ImageTk.PhotoImage(image)
-            self.plate_image_label.config(
-                image=self.plate_photo,
-                text=""
-            )
+            self.plate_image_label.config(image=self.plate_photo, text="")
 
         except Exception:
 
-            self.plate_image_label.config(
-                image="",
-                text="Unable to load image"
-            )
+            self.plate_image_label.config(image="", text="Unable to load image")
             self.plate_photo = None
 
     def clear(self):
