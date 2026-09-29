@@ -148,7 +148,7 @@ class TrafficVehicleCounter:
         # ------------------------------------------------
 
         self.vehicle_table = VehicleTable(
-            root,
+            self.video_area,
             self.select_vehicle
         )
 
@@ -1214,6 +1214,77 @@ class TrafficVehicleCounter:
             plate_confidence=ocr_confidence,
 
             plate_image=plate_image
+        )
+
+        # -------------------------------------
+        # CREATE INSPECTOR RECORD
+        # -------------------------------------
+
+        vehicle_record = {
+            "id": vehicle_id,
+            "type": vehicle_type,
+            "confidence": confidence,
+            "direction": direction,
+            "plate": plate_number,
+            "plate_confidence": ocr_confidence,
+            "timestamp": event["timestamp"],
+
+            "vehicle_image": os.path.join(
+                self.capture_manager.vehicle_directory,
+                event["vehicle_image"]
+            ),
+
+            "plate_image": (
+                os.path.join(
+                    self.capture_manager.plate_directory,
+                    event["plate_image"]
+                )
+                if event["plate_image"]
+                else None
+            )
+        }
+
+        # Store the captured record
+        self.vehicle_history[
+            vehicle_id
+        ]["event"] = vehicle_record
+
+        self.vehicle_table.add_vehicle(
+            vehicle_record
+        )
+
+        # Update inspector
+        self.vehicle_panel.update(
+            vehicle_record
+        )
+
+        # Update status
+        if plate_image is None:
+
+            status = (
+                f"Captured {vehicle_type} "
+                f"ID:{vehicle_id} | "
+                f"No plate detected"
+            )
+
+        elif plate_number == "UNKNOWN":
+
+            status = (
+                f"Captured {vehicle_type} "
+                f"ID:{vehicle_id} | "
+                f"Plate detected | OCR failed"
+            )
+
+        else:
+
+            status = (
+                f"Captured {vehicle_type} "
+                f"ID:{vehicle_id} | "
+                f"Plate: {plate_number}"
+            )
+
+        self.status_label.config(
+            text=status
         )
 
         # -------------------------------------
