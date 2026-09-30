@@ -7,6 +7,8 @@ TrafficVision is a Python-based computer vision application designed to analyze 
 The system combines **YOLO object detection and tracking**, **license plate detection**, **OCR**, **OpenCV video processing**, and a **Tkinter desktop interface** into a single traffic footage analysis tool.
 
 ---
+<img width="1915" height="1079" alt="Screenshot 2026-09-30 002514" src="https://github.com/user-attachments/assets/4c054416-b832-4ff3-88e8-e7f80b8c6e61" />
+
 
 ## Features
 
