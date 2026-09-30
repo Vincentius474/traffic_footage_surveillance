@@ -2,7 +2,7 @@
 
 ## Traffic Footage Surveillance & Inspection System
 
-TrafficVision is a Python-based computer vision application designed to analyze traffic footage, detect and track vehicles, identify license plates, perform OCR, capture vehicle evidence, and provide an interactive interface for inspecting traffic events.
+Traffic Footage Surveillance is a Python-based computer vision application designed to analyze traffic footage, detect and track vehicles, identify license plates, perform OCR, capture vehicle evidence, and provide an interactive interface for inspecting traffic events.
 
 The system combines **YOLO object detection and tracking**, **license plate detection**, **OCR**, **OpenCV video processing**, and a **Tkinter desktop interface** into a single traffic footage analysis tool.
 
